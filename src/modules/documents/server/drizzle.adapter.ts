@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { documents } from "@/src/db/schema";
 import { db } from "@/src/db";
@@ -41,6 +41,24 @@ export async function deleteDocument(id: string) {
   await db.delete(documents).where(eq(documents.id, id));
 }
 
-export async function updateContent(id: string, content: unknown) {
-  await db.update(documents).set({ content }).where(eq(documents.id, id));
+export async function updateContent(
+  id: string,
+  content: unknown,
+  versionId: number
+) {
+  const result = await db
+    .update(documents)
+    .set({ content, revision: versionId + 1 })
+    .where(and(eq(documents.id, id), eq(documents.revision, versionId)))
+    .returning({ revisedVersion: documents.revision });
+
+  return result[0]?.revisedVersion ?? null;
+}
+
+export async function renameDocument(documentId: string, newTitle: string) {
+  return await db
+    .update(documents)
+    .set({ title: newTitle })
+    .where(eq(documents.id, documentId))
+    .returning();
 }
