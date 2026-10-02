@@ -1,12 +1,17 @@
 import type { Document } from "../document.types";
-import { saveDocumentAction } from "../server/actions";
+import { createDocumentAction, saveDocumentAction } from "../server/actions";
 
-type SaveStatus = "saved" | "saving" | "unsaved" | "error";
+type SaveStatus = "saved" | "saving" | "creating" | "unsaved" | "error";
 export class DocumentRepository {
-  private _documentData: Document;
+  private _documentData: Pick<Document, "content" | "revision">;
   private _isDirty = false;
 
-  readonly documentId: string;
+  readonly initialContent: unknown;
+  readonly title: string;
+  readonly isNew: boolean;
+
+  readonly localKey: string = crypto.randomUUID();
+  documentId: string | null;
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private saveInFlight: Promise<void> | null = null;
@@ -15,9 +20,16 @@ export class DocumentRepository {
   private status: SaveStatus = "saved";
   private listeners = new Set<() => void>();
 
-  constructor(data: Document) {
-    this._documentData = { ...data };
-    this.documentId = data.id;
+  constructor(data?: Document) {
+    this.documentId = data?.id ?? null;
+    this.isNew = !data;
+    this.title = data?.title ?? "Untitled";
+    this.initialContent = data?.content ?? { type: "doc", content: [] };
+    this._documentData = {
+      content: data?.content ?? { type: "doc", content: [] },
+      revision: data?.revision ?? 0,
+    };
+    this.status = data ? "saved" : "unsaved";
   }
 
   updateState(newContent: Document["content"]) {
@@ -41,8 +53,10 @@ export class DocumentRepository {
       this.debounceTimer = null;
     }
 
-    if (!this.saveInFlight && this._isDirty) {
-      this.saveInFlight = this.savePendingChanges();
+    if (!this.saveInFlight && (this.documentId === null || this._isDirty)) {
+      this.saveInFlight = Promise.resolve().then(() =>
+        this.savePendingChanges()
+      );
     }
 
     if (this.saveInFlight) {
@@ -73,6 +87,18 @@ export class DocumentRepository {
   }
 
   private async savePendingChanges() {
+    if (this.documentId === null) {
+      this.setStatus("creating");
+      try {
+        const document = await createDocumentAction();
+        this.documentId = document.id;
+        this._documentData.revision = document.revision;
+      } catch (error) {
+        this.setStatus("error");
+        throw error;
+      }
+    }
+    const documentId = this.documentId;
     while (this._isDirty) {
       const content = this._documentData.content;
       const editVersion = this.editVersion;
@@ -81,7 +107,7 @@ export class DocumentRepository {
       let result;
       try {
         result = await saveDocumentAction(
-          this.documentId,
+          documentId,
           content,
           this._documentData.revision
         );
@@ -97,7 +123,7 @@ export class DocumentRepository {
 
       this._documentData.revision = result.data.revision;
       this._isDirty = this.editVersion !== editVersion;
-      this.setStatus("saved");
     }
+    this.setStatus("saved");
   }
 }

@@ -66,16 +66,6 @@ export class DocumentManager {
     this.emit();
   }
 
-  createDocument() {
-    const newDocument: DocMeta = {
-      id: crypto.randomUUID(),
-      title: "Untitled",
-      updatedAt: new Date(),
-    };
-    this.openDocument(newDocument);
-    return newDocument;
-  }
-
   private emit() {
     this.snapshot = {
       recentDocuments: this._metaData,

@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { OpenedDocument } from "@/src/modules/documents/documents-manager/opened-document";
-import { DocumentEditor } from "@/src/modules/editor/document-editor";
+import { DocumentRouteSync } from "@/src/modules/editor/components/document-workspace";
 import { getDocument } from "@/src/modules/documents/server";
 
 export default async function DocumentPage({
@@ -17,23 +16,5 @@ export default async function DocumentPage({
 
   if (!document) notFound();
 
-  return (
-    <div className="flow-workspace">
-      <OpenedDocument
-        id={document.id}
-        title={document.title}
-        updatedAt={document.updatedAt}
-      />
-      <main className="flow-document">
-        <div className="flow-document__topline">
-          <span>My workspace</span>
-          <span className="flow-document__separator">/</span>
-          <span className="flow-document__current">{document.title}</span>
-        </div>
-        <div className="flow-document__body">
-          <DocumentEditor key={document.id} document={document} />
-        </div>
-      </main>
-    </div>
-  );
+  return <DocumentRouteSync document={document} />;
 }

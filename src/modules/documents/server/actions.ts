@@ -2,7 +2,15 @@
 
 import { udpateContent } from "./document.service";
 import type { SaveResult } from "./document.service";
-import { renameDocument } from "./drizzle.adapter";
+import { create, renameDocument } from "./drizzle.adapter";
+
+export async function createDocumentAction() {
+  // Simulate a slow creation request while the draft remains editable.
+  if (process.env.NODE_ENV === "development") {
+    await new Promise<void>((resolve) => setTimeout(resolve, 10000));
+  }
+  return create("Untitled");
+}
 
 export async function rename(title: string, documentId: string) {
   //check auth
