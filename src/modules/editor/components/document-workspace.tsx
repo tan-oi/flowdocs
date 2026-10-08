@@ -5,45 +5,74 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import { DocumentRepository } from "../../documents/document-repository/document.repository";
 import type { Document } from "../../documents/document.types";
 import ActiveDocument from "./active-document";
+import DocumentSidebar from "./document-sidebar";
+import {
+  useDocumentManager,
+  useDocumentManagerSnapshot,
+} from "../../documents/documents-manager/document-manager-provider";
 
 const DocumentRepositoryContext = createContext<
-  ((document?: Document) => void) | null
+  ((document?: Document, documentId?: string) => void) | null
 >(null);
 
 export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
-  const [documentRepository, setDocumentRepository] =
-    useState<DocumentRepository | null>(null);
-  const openDocument = useCallback((document?: Document) => {
-    setDocumentRepository((current) =>
-      current && current.documentId === (document?.id ?? null)
-        ? current
-        : new DocumentRepository(document)
-    );
-  }, []);
+  const manager = useDocumentManager();
+  const { activeRepository: documentRepository } = useDocumentManagerSnapshot();
+
+  const openDocument = useCallback(
+    (document?: Document, documentId?: string) => {
+      const requestedId = documentId ?? document?.id ?? null;
+      const current = manager.activeRepository;
+      if (current && current.documentId === requestedId) return;
+
+      const cached = requestedId
+        ? manager.getRepositoryByDocumentId(requestedId)
+        : null;
+      if (requestedId && !cached && !document) return;
+
+      const repository = cached ?? new DocumentRepository(document);
+
+      if (!cached) manager.registerRepository(repository);
+
+      manager.activateRepository(repository);
+    },
+    [manager]
+  );
 
   return (
     <DocumentRepositoryContext.Provider value={openDocument}>
       {children}
-      {documentRepository && (
-        <ActiveDocument
-          key={documentRepository.localKey}
-          documentRepository={documentRepository}
-        />
-      )}
+      <div className="flow-workspace">
+        <DocumentSidebar />
+        {documentRepository && (
+          <ActiveDocument
+            key={documentRepository.localKey}
+            documentRepository={documentRepository}
+          />
+        )}
+      </div>
     </DocumentRepositoryContext.Provider>
   );
 }
 
 export function DocumentRouteSync({ document }: { document?: Document }) {
   const openDocument = useContext(DocumentRepositoryContext);
+  const pathname = usePathname();
   if (!openDocument) throw new Error("DocumentWorkspace is missing");
   useEffect(() => {
-    openDocument(document);
-  }, [openDocument, document]);
+    const documentId = pathname.match(/^\/document\/([^/]+)\/?$/)?.[1];
+    if (!documentId) return;
+
+    if (documentId === "new") {
+      openDocument();
+    } else {
+      openDocument(document?.id === documentId ? document : undefined, documentId);
+    }
+  }, [openDocument, document, pathname]);
   return null;
 }

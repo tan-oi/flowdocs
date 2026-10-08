@@ -38,7 +38,7 @@ export async function saveDocumentAction(
     const result = await udpateContent(documentId, version, content);
 
     if (process.env.NODE_ENV === "development") {
-      await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+      await new Promise<void>((resolve) => setTimeout(resolve, 10000));
     }
     if (result.ok) {
       return {

@@ -14,7 +14,7 @@ export default function DocumentEditor({ repo }: { repo: DocumentRepository }) {
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: repo.initialContent as Content,
+    content: repo.content as Content,
     immediatelyRender: false,
     onUpdate: ({ editor }) => repo.updateState(editor.getJSON()),
   });

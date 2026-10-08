@@ -6,7 +6,6 @@ export class DocumentRepository {
   private _documentData: Pick<Document, "content" | "revision">;
   private _isDirty = false;
 
-  readonly initialContent: unknown;
   readonly title: string;
   readonly isNew: boolean;
 
@@ -24,12 +23,15 @@ export class DocumentRepository {
     this.documentId = data?.id ?? null;
     this.isNew = !data;
     this.title = data?.title ?? "Untitled";
-    this.initialContent = data?.content ?? { type: "doc", content: [] };
     this._documentData = {
       content: data?.content ?? { type: "doc", content: [] },
       revision: data?.revision ?? 0,
     };
     this.status = data ? "saved" : "unsaved";
+  }
+
+  get content(): Document["content"] {
+    return this._documentData.content;
   }
 
   updateState(newContent: Document["content"]) {

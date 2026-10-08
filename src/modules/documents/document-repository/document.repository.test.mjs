@@ -55,6 +55,7 @@ test('typing during creation and saving survives with the same local identity', 
   assert.equal(repo.localKey, key);
   assert.equal(repo.documentId, 'server-id');
   assert.equal(repo.getSnapshot(), 'saved');
+  assert.equal(repo.content, 'typed during save');
 });
 
 test('existing document skips creation and uses the loaded revision', async () => {
