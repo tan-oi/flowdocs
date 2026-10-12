@@ -6,7 +6,7 @@ import {
   useContext,
   useEffect,
 } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { DocumentRepository } from "../../documents/document-repository/document.repository";
 import type { Document } from "../../documents/document.types";
 import ActiveDocument from "./active-document";
@@ -17,7 +17,7 @@ import {
 } from "../../documents/documents-manager/document-manager-provider";
 
 const DocumentRepositoryContext = createContext<
-  ((document?: Document, documentId?: string) => void) | null
+  ((document?: Document, documentId?: string) => boolean) | null
 >(null);
 
 export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
@@ -28,18 +28,19 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
     (document?: Document, documentId?: string) => {
       const requestedId = documentId ?? document?.id ?? null;
       const current = manager.activeRepository;
-      if (current && current.documentId === requestedId) return;
+      if (current && current.documentId === requestedId) return true;
 
       const cached = requestedId
         ? manager.getRepositoryByDocumentId(requestedId)
         : null;
-      if (requestedId && !cached && !document) return;
+      if (requestedId && !cached && !document) return false;
 
       const repository = cached ?? new DocumentRepository(document);
 
       if (!cached) manager.registerRepository(repository);
 
       manager.activateRepository(repository);
+      return true;
     },
     [manager]
   );
@@ -63,6 +64,7 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
 export function DocumentRouteSync({ document }: { document?: Document }) {
   const openDocument = useContext(DocumentRepositoryContext);
   const pathname = usePathname();
+  const router = useRouter();
   if (!openDocument) throw new Error("DocumentWorkspace is missing");
   useEffect(() => {
     const documentId = pathname.match(/^\/document\/([^/]+)\/?$/)?.[1];
@@ -71,8 +73,12 @@ export function DocumentRouteSync({ document }: { document?: Document }) {
     if (documentId === "new") {
       openDocument();
     } else {
-      openDocument(document?.id === documentId ? document : undefined, documentId);
+      const opened = openDocument(
+        document?.id === documentId ? document : undefined,
+        documentId
+      );
+      if (!opened) router.replace(pathname, { scroll: false });
     }
-  }, [openDocument, document, pathname]);
+  }, [openDocument, document, pathname, router]);
   return null;
 }

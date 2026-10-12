@@ -56,9 +56,11 @@ export async function updateContent(
 }
 
 export async function renameDocument(documentId: string, newTitle: string) {
-  return await db
+  const [document] = await db
     .update(documents)
-    .set({ title: newTitle })
+    .set({ title: newTitle, updatedAt: new Date() })
     .where(eq(documents.id, documentId))
-    .returning();
+    .returning({ id: documents.id, title: documents.title, updatedAt: documents.updatedAt });
+
+  return document ?? null;
 }

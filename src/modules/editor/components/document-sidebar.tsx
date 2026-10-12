@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useDocumentManagerSnapshot } from "../../documents/documents-manager/document-manager-provider";
+import DocumentRename from "./document-rename";
+import {
+  useDocumentManager,
+  useDocumentManagerSnapshot,
+} from "../../documents/documents-manager/document-manager-provider";
 
 const statusLabels = {
   saved: "Saved",
@@ -12,6 +16,7 @@ const statusLabels = {
 };
 
 export default function DocumentSidebar() {
+  const manager = useDocumentManager();
   const { recentDocuments, activeRepository, repositories } =
     useDocumentManagerSnapshot();
 
@@ -42,11 +47,23 @@ export default function DocumentSidebar() {
             const repository = repositories.find((repo) => repo.documentId === document.id);
             const status = repository?.getSnapshot();
             return (
-              <li key={document.id}>
+              <li key={document.id} className="flow-sidebar__row">
                 <Link
                   className="flow-sidebar__document"
                   href={`/document/${document.id}`}
+                  prefetch={false}
                   scroll={false}
+                  onNavigate={(event) => {
+                    const cached = manager.getRepositoryByDocumentId(document.id);
+                    if (!cached) return;
+
+                    event.preventDefault();
+                    const href = `/document/${document.id}`;
+                    if (window.location.pathname !== href) {
+                      window.history.pushState(null, "", href);
+                    }
+                    manager.activateRepository(cached);
+                  }}
                   aria-current={activeRepository?.documentId === document.id ? "page" : undefined}
                 >
                   <span className="flow-sidebar__title">{document.title}</span>
@@ -56,6 +73,7 @@ export default function DocumentSidebar() {
                     </span>
                   )}
                 </Link>
+                <DocumentRename id={document.id} title={document.title} />
               </li>
             );
           })}

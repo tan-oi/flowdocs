@@ -1,8 +1,21 @@
 "use server";
 
+import { z } from "zod";
 import { udpateContent } from "./document.service";
 import type { SaveResult } from "./document.service";
 import { create, renameDocument } from "./drizzle.adapter";
+
+const renameSchema = z.object({
+  documentId: z.uuid("Invalid document ID"),
+  title: z.string().trim().min(1, "Title cannot be empty"),
+});
+
+type RenameResult =
+  | { ok: true; data: { id: string; title: string; updatedAt: Date } }
+  | {
+      ok: false;
+      error: { code: "validation" | "not_found" | "internal"; message: string };
+    };
 
 export async function createDocumentAction() {
   // Simulate a slow creation request while the draft remains editable.
@@ -12,19 +25,43 @@ export async function createDocumentAction() {
   return create("Untitled");
 }
 
-export async function rename(title: string, documentId: string) {
+export async function renameDocumentAction(
+  newTitle: string,
+  documentId: string
+): Promise<RenameResult> {
+  const input = renameSchema.safeParse({ title: newTitle, documentId });
+  if (!input.success) {
+    return {
+      ok: false,
+      error: { code: "validation", message: input.error.issues[0].message },
+    };
+  }
+
   //check auth
   try {
-    const result = renameDocument(documentId, title);
+    const document = await renameDocument(
+      input.data.documentId,
+      input.data.title
+    );
+    if (!document) {
+      return {
+        ok: false,
+        error: { code: "not_found", message: "Document not found" },
+      };
+    }
 
     return {
-      success: true,
-      response: result,
+      ok: true,
+      data: document,
     };
   } catch (err) {
+    console.error(err);
     return {
-      success: false,
-      response: err + "smth wrong",
+      ok: false,
+      error: {
+        code: "internal",
+        message: "Could not rename document. Try again.",
+      },
     };
   }
 }

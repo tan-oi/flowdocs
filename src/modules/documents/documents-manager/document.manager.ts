@@ -62,18 +62,20 @@ export class DocumentManager {
   }
 
   openDocument(document: DocMeta) {
+    const existing = this._metaData.find((doc) => doc.id === document.id);
     this._metaData = [
-      document,
+      existing ?? document,
       ...this._metaData.filter((doc) => doc.id !== document.id),
     ].slice(0, 5);
     this._activeDocument = document.id;
     this.emit();
   }
 
-  renameDocument(newDocumentTitle: string, documentId: string) {
-    if (!this._metaData.some((doc) => doc.id === documentId)) return;
+  renameDocument(newDocumentTitle: string, documentId: string, updatedAt?: Date) {
     this._metaData = this._metaData.map((doc) =>
-      doc.id === documentId ? { ...doc, title: newDocumentTitle } : doc
+      doc.id === documentId
+        ? { ...doc, title: newDocumentTitle, updatedAt: updatedAt ?? doc.updatedAt }
+        : doc
     );
     this.emit();
   }

@@ -10,6 +10,34 @@ const source = ts.transpileModule(readFileSync(new URL('./document.manager.ts', 
 }).outputText;
 vm.runInNewContext(source, { exports });
 
+test('reopening moves existing metadata to the top without replacing it with stale data', () => {
+  const updatedAt = new Date('2026-10-13T10:00:00Z');
+  const first = { id: 'A', title: 'Original title', updatedAt };
+  const second = { id: 'B', title: 'B', updatedAt };
+  const manager = new exports.DocumentManager([second, first]);
+  manager.renameDocument('Renamed A', 'A', updatedAt);
+  const before = manager.getSnapshot();
+  const renamed = before.recentDocuments[1];
+  let notifications = 0;
+  manager.subscribe(() => notifications++);
+
+  manager.openDocument({ ...first, updatedAt: new Date('2026-10-14T10:00:00Z') });
+
+  const after = manager.getSnapshot();
+  assert.notEqual(after.recentDocuments, before.recentDocuments);
+  assert.equal(after.recentDocuments[0], renamed);
+  assert.equal(after.recentDocuments[0].title, 'Renamed A');
+  assert.equal(after.recentDocuments[0].updatedAt, updatedAt);
+  assert.equal(after.recentDocuments[1], second);
+  assert.equal(after.activeDocumentId, 'A');
+  assert.equal(notifications, 1);
+
+  const created = { id: 'C', title: 'Untitled', updatedAt };
+  manager.openDocument(created);
+  assert.equal(manager.getSnapshot().recentDocuments[0], created);
+  assert.equal(manager.getSnapshot().recentDocuments[1], renamed);
+});
+
 test('registration publishes once, forwards repo changes, and cleans up on removal', () => {
   const manager = new exports.DocumentManager([]);
   const listeners = new Set();

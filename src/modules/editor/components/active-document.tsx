@@ -3,7 +3,6 @@ import { useEffect, useSyncExternalStore } from "react";
 import { DocumentRepository } from "../../documents/document-repository/document.repository";
 import Link from "next/link";
 import DocumentEditor from "./document-editor";
-import { browser } from "react-dom";
 
 export default function ActiveDocument({
   documentRepository,
@@ -43,12 +42,6 @@ export default function ActiveDocument({
     <main className="flow-document">
       <div className="flow-document__topline">
         <span className="flow-document__workspace">My workspace</span>
-        <span className="flow-document__separator" aria-hidden="true">
-          /
-        </span>
-        <span className="flow-document__current">
-          {documentRepository.title}
-        </span>
         <span
           className="flow-document__status"
           data-status={status}
