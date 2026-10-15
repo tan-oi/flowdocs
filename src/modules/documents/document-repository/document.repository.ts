@@ -1,12 +1,15 @@
 import type { Document } from "../document.types";
 import { createDocumentAction, saveDocumentAction } from "../server/actions";
 
-type SaveStatus = "saved" | "saving" | "creating" | "unsaved" | "error";
+type SaveStatus = "saved" | "saving" | "creating" | "unsaved" | "error" | "paused";
 export class DocumentRepository {
   private _documentData: Pick<Document, "content" | "revision">;
   private _isDirty = false;
+  private isDeleted = false;
+  private savingPaused = false;
 
   readonly title: string;
+  readonly updatedAt: Date;
   readonly isNew: boolean;
 
   readonly localKey: string = crypto.randomUUID();
@@ -23,6 +26,7 @@ export class DocumentRepository {
     this.documentId = data?.id ?? null;
     this.isNew = !data;
     this.title = data?.title ?? "Untitled";
+    this.updatedAt = data?.updatedAt ?? new Date();
     this._documentData = {
       content: data?.content ?? { type: "doc", content: [] },
       revision: data?.revision ?? 0,
@@ -35,14 +39,16 @@ export class DocumentRepository {
   }
 
   updateState(newContent: Document["content"]) {
+    if (this.isDeleted) return;
     this._documentData.content = newContent;
 
     this._isDirty = true;
 
-    if (!this.saveInFlight) {
+    if (!this.saveInFlight && !this.savingPaused) {
       this.setStatus("unsaved");
     }
     this.editVersion++;
+    if (this.savingPaused) return;
     if (this.debounceTimer !== null) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       void this.saveNow().catch(console.error);
@@ -50,6 +56,7 @@ export class DocumentRepository {
   }
 
   async saveNow() {
+    if (this.isDeleted || this.savingPaused) return;
     if (this.debounceTimer !== null) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -88,7 +95,35 @@ export class DocumentRepository {
     void this.saveNow().catch(console.error);
   }
 
+  markDeleted() {
+    this.isDeleted = true;
+    this.pauseSaving();
+  }
+
+  pauseSaving() {
+    this.savingPaused = true;
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    if (!this.isDeleted) this.setStatus("paused");
+  }
+
+  async resumeSaving() {
+    if (this.isDeleted) return;
+    this.savingPaused = false;
+    try {
+      await this.saveInFlight;
+    } catch {
+      // Retry the retained content after the previous request settles.
+    }
+    if (this.isDeleted || this.savingPaused) return;
+    this.setStatus(this._isDirty ? "unsaved" : "saved");
+    await this.saveNow();
+  }
+
   private async savePendingChanges() {
+    if (this.isDeleted || this.savingPaused) return;
     if (this.documentId === null) {
       this.setStatus("creating");
       try {
@@ -101,7 +136,7 @@ export class DocumentRepository {
       }
     }
     const documentId = this.documentId;
-    while (this._isDirty) {
+    while (this._isDirty && !this.isDeleted && !this.savingPaused) {
       const content = this._documentData.content;
       const editVersion = this.editVersion;
       this.setStatus("saving");
@@ -114,18 +149,22 @@ export class DocumentRepository {
           this._documentData.revision
         );
       } catch (error) {
+        if (this.isDeleted || this.savingPaused) return;
         this.setStatus("error");
         throw error;
       }
 
       if (!result.ok) {
+        if (this.isDeleted || this.savingPaused) return;
         this.setStatus("error");
         throw new Error(result.error.message || result.error.code);
       }
 
       this._documentData.revision = result.data.revision;
       this._isDirty = this.editVersion !== editVersion;
+      // Retain the acknowledged revision in case deletion fails and saving resumes.
+      if (this.isDeleted || this.savingPaused) return;
     }
-    this.setStatus("saved");
+    if (!this.isDeleted && !this.savingPaused) this.setStatus("saved");
   }
 }

@@ -3,11 +3,15 @@
 import { z } from "zod";
 import { udpateContent } from "./document.service";
 import type { SaveResult } from "./document.service";
-import { create, renameDocument } from "./drizzle.adapter";
+import { create, deleteDocument, renameDocument } from "./drizzle.adapter";
 
 const renameSchema = z.object({
   documentId: z.uuid("Invalid document ID"),
   title: z.string().trim().min(1, "Title cannot be empty"),
+});
+
+const deletionSchema = z.object({
+  documentId: z.uuid("Invalid document ID"),
 });
 
 type RenameResult =
@@ -16,6 +20,13 @@ type RenameResult =
       ok: false;
       error: { code: "validation" | "not_found" | "internal"; message: string };
     };
+
+// Temporary development simulation for rename/delete pending and error UI.
+async function simulateMutationFailure() {
+  if (process.env.NODE_ENV !== "development") return;
+  await new Promise<void>((resolve) => setTimeout(resolve, 3000));
+  if (Math.random() < 0.9) throw new Error("Simulated development failure");
+}
 
 export async function createDocumentAction() {
   // Simulate a slow creation request while the draft remains editable.
@@ -39,6 +50,7 @@ export async function renameDocumentAction(
 
   //check auth
   try {
+    await simulateMutationFailure();
     const document = await renameDocument(
       input.data.documentId,
       input.data.title
@@ -95,6 +107,34 @@ export async function saveDocumentAction(
       error: {
         code: "internal",
         message: "Somethign went wrong",
+      },
+    };
+  }
+}
+
+export async function deleteDocumentAction(documentId: string) {
+  const input = deletionSchema.safeParse({ documentId });
+  if (!input.success) {
+    return {
+      ok: false as const,
+      error: { code: "validation", message: input.error.issues[0].message },
+    };
+  }
+  try {
+    await simulateMutationFailure();
+    const document = await deleteDocument(input.data.documentId);
+    // A repeated delete also succeeds if the record is already gone.
+    return {
+      ok: true as const,
+      data: document ?? { id: input.data.documentId },
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      ok: false as const,
+      error: {
+        code: "internal",
+        message: "Could not delete document. Try again.",
       },
     };
   }

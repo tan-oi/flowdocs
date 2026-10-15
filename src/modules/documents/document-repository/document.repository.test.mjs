@@ -14,8 +14,9 @@ function repository(actions, data) {
 }
 function deferred() {
   let resolve;
-  const promise = new Promise(r => { resolve = r; });
-  return { promise, resolve };
+  let reject;
+  const promise = new Promise((r, j) => { resolve = r; reject = j; });
+  return { promise, resolve, reject };
 }
 const document = { id: 'server-id', title: 'Untitled', content: { type: 'doc', content: [] }, revision: 0 };
 const saved = revision => ({ ok: true, data: { revision } });
@@ -110,4 +111,98 @@ test('closing the editor during creation still persists its pending content', as
   create.resolve(document);
   await pending;
   assert.equal(written, 'keep me');
+});
+
+test('confirmed deletion cancels queued saves and editor cleanup cannot flush them', async () => {
+  let writes = 0;
+  const repo = repository({ saveDocumentAction: async () => { writes++; return saved(1); } }, document);
+  repo.updateState('Last edit');
+  const saving = repo.saveNow();
+  repo.markDeleted();
+  repo.close();
+  await saving;
+  await repo.saveNow();
+  assert.equal(writes, 0);
+});
+
+test('late save completion cannot schedule another write after confirmed deletion', async () => {
+  const first = deferred();
+  let writes = 0;
+  const repo = repository({ saveDocumentAction: () => { writes++; return first.promise; } }, document);
+  repo.updateState('First edit');
+  const saving = repo.saveNow();
+  await Promise.resolve();
+  repo.updateState('Latest edit');
+  repo.markDeleted();
+  let notifications = 0;
+  repo.subscribe(() => notifications++);
+  first.resolve(saved(1));
+  await saving;
+  assert.equal(writes, 1);
+  assert.equal(notifications, 0);
+});
+
+test('pausing for deletion cancels queued saves and retains typing for a failed delete', async () => {
+  const writes = [];
+  const repo = repository({ saveDocumentAction: async (_id, content) => {
+    writes.push(content);
+    return saved(1);
+  } }, document);
+  repo.updateState('Before delete');
+  const queued = repo.saveNow();
+  repo.pauseSaving();
+  repo.updateState('Typed while delete was pending');
+  assert.equal(repo.getSnapshot(), 'paused');
+  repo.close();
+  await queued;
+  await repo.saveNow();
+  assert.equal(writes.length, 0);
+  await repo.resumeSaving();
+  assert.deepEqual(writes, ['Typed while delete was pending']);
+  assert.equal(repo.getSnapshot(), 'saved');
+});
+
+test('pausing an in-flight save stops follow-up writes and resumes with its acknowledged revision', async () => {
+  const first = deferred();
+  const writes = [];
+  const repo = repository({ saveDocumentAction: async (_id, content, revision) => {
+    writes.push({ content, revision });
+    return writes.length === 1 ? first.promise : saved(revision + 1);
+  } }, document);
+  repo.updateState('First edit');
+  const saving = repo.saveNow();
+  await Promise.resolve();
+  repo.updateState('Second edit');
+  repo.pauseSaving();
+  repo.updateState('Latest edit');
+  assert.equal(repo.getSnapshot(), 'paused');
+  first.resolve(saved(1));
+  await saving;
+  assert.equal(writes.length, 1);
+  assert.equal(repo.getSnapshot(), 'paused');
+  await repo.resumeSaving();
+  assert.deepEqual(writes, [
+    { content: 'First edit', revision: 0 },
+    { content: 'Latest edit', revision: 1 },
+  ]);
+  assert.equal(repo.getSnapshot(), 'saved');
+});
+
+test('a save failure during deletion preserves content for resuming if deletion also fails', async () => {
+  const first = deferred();
+  let writes = 0;
+  const repo = repository({ saveDocumentAction: async (_id, content, revision) => {
+    assert.equal(content, 'Retained content');
+    assert.equal(revision, 0);
+    return ++writes === 1 ? first.promise : saved(1);
+  } }, document);
+  repo.updateState('Retained content');
+  const saving = repo.saveNow();
+  await Promise.resolve();
+  repo.pauseSaving();
+  first.reject(new Error('offline'));
+  await saving;
+  await repo.resumeSaving();
+  assert.equal(writes, 2);
+  assert.equal(repo.getSnapshot(), 'saved');
 });

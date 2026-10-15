@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { renameDocumentAction } from "../../documents/server/actions";
 import { useDocumentManager } from "../../documents/documents-manager/document-manager-provider";
 
 export default function DocumentRename({ id, title }: { id: string; title: string }) {
@@ -45,17 +44,12 @@ export default function DocumentRename({ id, title }: { id: string; title: strin
         if (pending) return;
         startTransition(async () => {
           setError(null);
-          try {
-            const result = await renameDocumentAction(draftTitle, id);
-            if (!result.ok) {
-              setError(result.error.message);
-              return;
-            }
-            manager.renameDocument(result.data.title, result.data.id, result.data.updatedAt);
-            setEditing(false);
-          } catch {
-            setError("Could not rename document. Try again.");
+          const result = await manager.renameDocument(draftTitle, id);
+          if (!result.ok) {
+            setError(result.error.message);
+            return;
           }
+          setEditing(false);
         });
       }}
     >

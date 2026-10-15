@@ -24,9 +24,23 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
   const manager = useDocumentManager();
   const { activeRepository: documentRepository } = useDocumentManagerSnapshot();
 
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      const pending = manager.getSnapshot().repositories.some(
+        (repository) => repository.getSnapshot() !== "saved"
+      );
+      if (!pending) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [manager]);
+
   const openDocument = useCallback(
     (document?: Document, documentId?: string) => {
       const requestedId = documentId ?? document?.id ?? null;
+      if (requestedId && manager.isDocumentUnavailable(requestedId)) return false;
       const current = manager.activeRepository;
       if (current && current.documentId === requestedId) return true;
 
@@ -62,6 +76,7 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
 }
 
 export function DocumentRouteSync({ document }: { document?: Document }) {
+  const manager = useDocumentManager();
   const openDocument = useContext(DocumentRepositoryContext);
   const pathname = usePathname();
   const router = useRouter();
@@ -69,6 +84,11 @@ export function DocumentRouteSync({ document }: { document?: Document }) {
   useEffect(() => {
     const documentId = pathname.match(/^\/document\/([^/]+)\/?$/)?.[1];
     if (!documentId) return;
+    if (manager.isDocumentUnavailable(documentId)) {
+      const next = manager.getSnapshot().recentDocuments[0];
+      router.replace(next ? `/document/${next.id}` : "/document/new", { scroll: false });
+      return;
+    }
 
     if (documentId === "new") {
       openDocument();
@@ -79,6 +99,6 @@ export function DocumentRouteSync({ document }: { document?: Document }) {
       );
       if (!opened) router.replace(pathname, { scroll: false });
     }
-  }, [openDocument, document, pathname, router]);
+  }, [openDocument, document, pathname, router, manager]);
   return null;
 }

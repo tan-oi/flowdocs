@@ -1,4 +1,3 @@
-import { useDocumentManager } from "../../documents/documents-manager/document-manager-provider";
 import { useEffect, useSyncExternalStore } from "react";
 import { DocumentRepository } from "../../documents/document-repository/document.repository";
 import Link from "next/link";
@@ -9,7 +8,6 @@ export default function ActiveDocument({
 }: {
   documentRepository: DocumentRepository;
 }) {
-  const manager = useDocumentManager();
   const status = useSyncExternalStore(
     documentRepository.subscribe,
     documentRepository.getSnapshot,
@@ -19,45 +17,32 @@ export default function ActiveDocument({
 
   useEffect(() => {
     if (!documentId) return;
-    manager.openDocument({
-      id: documentId,
-      title: documentRepository.title,
-      updatedAt: new Date(),
-    });
     if (documentRepository.isNew)
       window.history.replaceState(null, "", `/document/${documentId}`);
-  }, [documentId, manager, documentRepository]);
-
-  useEffect(() => {
-    if (status === "saved") return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [status]);
+  }, [documentId, documentRepository]);
 
   return (
     <main className="flow-document">
       <div className="flow-document__topline">
         <span className="flow-document__workspace">My workspace</span>
-        <span
-          className="flow-document__status"
-          data-status={status}
-          role="status"
-        >
-          <i aria-hidden="true" />
-          {
+        {status !== "paused" && (
+          <span
+            className="flow-document__status"
+            data-status={status}
+            role="status"
+          >
+            <i aria-hidden="true" />
             {
-              saved: "All changes saved",
-              saving: "Saving…",
-              creating: "Creating…",
-              unsaved: "Unsaved changes",
-              error: "Couldn’t save",
-            }[status]
-          }
-        </span>
+              {
+                saved: "All changes saved",
+                saving: "Saving…",
+                creating: "Creating…",
+                unsaved: "Unsaved changes",
+                error: "Couldn’t save",
+              }[status]
+            }
+          </span>
+        )}
         <Link className="flow-document__new" href="/document/new">
           <span aria-hidden="true">+</span> New document
         </Link>

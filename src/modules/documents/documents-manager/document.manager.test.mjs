@@ -8,14 +8,25 @@ const exports = {};
 const source = ts.transpileModule(readFileSync(new URL('./document.manager.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-vm.runInNewContext(source, { exports });
+function loadManager(
+  deleteDocumentAction = async id => ({ ok: true, data: { id } }),
+  renameDocumentAction = async (title, id) => ({ ok: true, data: { id, title, updatedAt: new Date() } }),
+) {
+  const exports = {};
+  vm.runInNewContext(source, { exports, require: () => ({ deleteDocumentAction, renameDocumentAction }), console });
+  return exports.DocumentManager;
+}
+exports.DocumentManager = loadManager();
 
-test('reopening moves existing metadata to the top without replacing it with stale data', () => {
+test('reopening moves existing metadata to the top without replacing it with stale data', async () => {
   const updatedAt = new Date('2026-10-13T10:00:00Z');
   const first = { id: 'A', title: 'Original title', updatedAt };
   const second = { id: 'B', title: 'B', updatedAt };
-  const manager = new exports.DocumentManager([second, first]);
-  manager.renameDocument('Renamed A', 'A', updatedAt);
+  const DocumentManager = loadManager(undefined, async (title, id) => ({ ok: true, data: { id, title, updatedAt } }));
+  const manager = new DocumentManager([second, first]);
+  assert.equal(manager.activeDocumentId, null);
+  assert.equal(manager.getSnapshot().activeDocumentId, null);
+  await manager.renameDocument('Renamed A', 'A');
   const before = manager.getSnapshot();
   const renamed = before.recentDocuments[1];
   let notifications = 0;
@@ -29,7 +40,8 @@ test('reopening moves existing metadata to the top without replacing it with sta
   assert.equal(after.recentDocuments[0].title, 'Renamed A');
   assert.equal(after.recentDocuments[0].updatedAt, updatedAt);
   assert.equal(after.recentDocuments[1], second);
-  assert.equal(after.activeDocumentId, 'A');
+  assert.equal(after.activeDocumentId, null);
+  assert.equal(after.activeRepository, null);
   assert.equal(notifications, 1);
 
   const created = { id: 'C', title: 'Untitled', updatedAt };
@@ -99,6 +111,7 @@ test('activation preserves repo identity and repo notifications do not change se
   draft.documentId = 'C';
   notifyDraft();
   assert.equal(manager.getSnapshot().activeDocumentId, 'C');
+  assert.equal(manager.activeDocumentId, 'C');
   assert.equal(manager.activeRepository, draft);
 
   manager.activateRepository(other);
@@ -110,4 +123,104 @@ test('activation preserves repo identity and repo notifications do not change se
   manager.unregisterRepository(draft.localKey);
   assert.equal(manager.getSnapshot().activeRepository, null);
   assert.equal(manager.getSnapshot().activeDocumentId, null);
+});
+
+test('deletion keeps the row and repo until success, then evicts and prevents stale reopening', async () => {
+  let finish;
+  const DocumentManager = loadManager(() => new Promise(resolve => { finish = resolve; }));
+  const manager = new DocumentManager([{ id: 'A', title: 'A', updatedAt: new Date() }]);
+  let stopped = false;
+  let deleted = false;
+  let paused = false;
+  const repo = {
+    localKey: 'local-A', documentId: 'A',
+    subscribe: () => () => { stopped = true; },
+    markDeleted: () => { deleted = true; },
+    pauseSaving: () => { paused = true; },
+    resumeSaving: async () => assert.fail('successful deletion must not resume saves'),
+  };
+  manager.registerRepository(repo);
+  manager.activateRepository(repo);
+  const deleting = manager.deleteDocument('A');
+  assert.equal(paused, true);
+  assert.equal(deleted, false);
+  assert.equal(manager.activeRepository, repo);
+  assert.equal(manager.getSnapshot().recentDocuments.length, 1);
+  assert.equal(manager.getSnapshot().repositories[0], repo);
+  assert.equal(manager.getRepositoryByDocumentId('A'), repo);
+  assert.equal(stopped, false);
+  finish({ ok: true, data: { id: 'A' } });
+  assert.equal((await deleting).ok, true);
+  assert.equal(deleted, true);
+  assert.equal(stopped, true);
+  assert.equal(manager.getRepository(repo.localKey), null);
+  assert.equal(manager.getSnapshot().recentDocuments.length, 0);
+  assert.equal(manager.activeRepository, null);
+  assert.equal(manager.isDocumentUnavailable('A'), true);
+  manager.openDocument({ id: 'A', title: 'Stale', updatedAt: new Date() });
+  manager.activateRepository(repo);
+  assert.equal(manager.activeRepository, null);
+  assert.equal(manager.getSnapshot().recentDocuments.length, 0);
+});
+
+test('failed deletion leaves repo, content, metadata and selection intact and allows retry', async () => {
+  let attempts = 0;
+  const DocumentManager = loadManager(async () => ++attempts === 1
+    ? { ok: false, error: { message: 'Try again' } }
+    : { ok: true, data: { id: 'A' } });
+  const metadata = { id: 'A', title: 'Latest title', updatedAt: new Date() };
+  const manager = new DocumentManager([metadata]);
+  let resumed = false;
+  const repo = {
+    localKey: 'local-A', documentId: 'A', content: 'Unsaved edits',
+    subscribe: () => () => {}, markDeleted: () => {},
+    pauseSaving: () => {}, resumeSaving: async () => { resumed = true; },
+  };
+  manager.registerRepository(repo);
+  manager.activateRepository(repo);
+  const failure = await manager.deleteDocument('A');
+  assert.equal(failure.ok, false);
+  assert.equal(failure.error.message, 'Try again');
+  assert.equal(resumed, true);
+  assert.equal(manager.getRepositoryByDocumentId('A'), repo);
+  assert.equal(manager.getSnapshot().recentDocuments[0], metadata);
+  assert.equal(manager.activeRepository, repo);
+  assert.equal(repo.content, 'Unsaved edits');
+  assert.equal((await manager.deleteDocument('A')).ok, true);
+});
+
+test('rename waits for backend confirmation and returns failures without publishing metadata changes', async () => {
+  let finish;
+  let attempts = 0;
+  const failure = { ok: false, error: { message: 'Invalid title' } };
+  const DocumentManager = loadManager(undefined, (title, id) => {
+    assert.equal(id, 'A');
+    assert.equal(title, 'Requested title');
+    return ++attempts === 1 ? new Promise(resolve => { finish = resolve; }) : failure;
+  });
+  const manager = new DocumentManager([{ id: 'A', title: 'Original', updatedAt: new Date() }]);
+  const before = manager.getSnapshot();
+  const renaming = manager.renameDocument('Requested title', 'A');
+  assert.equal(manager.getSnapshot(), before);
+  const success = { ok: true, data: { id: 'A', title: 'Canonical title', updatedAt: new Date() } };
+  finish(success);
+  assert.equal(await renaming, success);
+  assert.equal(manager.getSnapshot().recentDocuments[0].title, 'Canonical title');
+  const renamed = manager.getSnapshot();
+  assert.equal(await manager.renameDocument('Requested title', 'A'), failure);
+  assert.equal(manager.getSnapshot(), renamed);
+});
+
+test('rename and delete turn rejected requests into returned errors without mutating document state', async () => {
+  const reject = async () => { throw new Error('Network failure'); };
+  const DocumentManager = loadManager(reject, reject);
+  const manager = new DocumentManager([{ id: 'A', title: 'Original', updatedAt: new Date() }]);
+  const snapshot = manager.getSnapshot();
+  const rename = await manager.renameDocument('New', 'A');
+  const deletion = await manager.deleteDocument('A');
+  assert.equal(rename.ok, false);
+  assert.equal(deletion.ok, false);
+  assert.match(rename.error.message, /rename/);
+  assert.match(deletion.error.message, /delete/);
+  assert.equal(manager.getSnapshot(), snapshot);
 });

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import DocumentRename from "./document-rename";
+import DocumentDelete from "./document-delete";
 import {
   useDocumentManager,
   useDocumentManagerSnapshot,
@@ -13,6 +14,7 @@ const statusLabels = {
   creating: "Creating…",
   unsaved: "Unsaved changes",
   error: "Couldn’t save",
+  paused: null,
 };
 
 export default function DocumentSidebar() {
@@ -34,13 +36,17 @@ export default function DocumentSidebar() {
         </h2>
         <ul className="flow-sidebar__list">
           {activeRepository && !activeRepository.documentId && (
-            <li>
+            <li className="flow-sidebar__row">
               <span className="flow-sidebar__document" aria-current="page">
                 <span className="flow-sidebar__title">{activeRepository.title}</span>
                 <span className="flow-sidebar__status" data-status={activeRepository.getSnapshot()}>
                   {statusLabels[activeRepository.getSnapshot()]}
                 </span>
               </span>
+              <div className="flow-sidebar__actions">
+                <button type="button" className="flow-sidebar__rename-button" disabled>Rename</button>
+                <button type="button" className="flow-sidebar__delete-button" disabled>Delete</button>
+              </div>
             </li>
           )}
           {recentDocuments.map((document) => {
@@ -67,13 +73,16 @@ export default function DocumentSidebar() {
                   aria-current={activeRepository?.documentId === document.id ? "page" : undefined}
                 >
                   <span className="flow-sidebar__title">{document.title}</span>
-                  {status && (
+                  {status && status !== "paused" && (
                     <span className="flow-sidebar__status" data-status={status}>
                       {statusLabels[status]}
                     </span>
                   )}
                 </Link>
-                <DocumentRename id={document.id} title={document.title} />
+                <div className="flow-sidebar__actions">
+                  <DocumentRename id={document.id} title={document.title} />
+                  <DocumentDelete id={document.id} title={document.title} />
+                </div>
               </li>
             );
           })}

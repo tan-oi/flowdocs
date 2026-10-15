@@ -515,8 +515,13 @@ body {
 .flow-sidebar__title { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .flow-sidebar__row { display: flex; flex-wrap: wrap; align-items: center; }
 .flow-sidebar__row > .flow-sidebar__document { flex: 1; min-width: 0; }
-.flow-sidebar__rename-button { padding: 8px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--flow-muted); font: inherit; font-size: 11px; cursor: pointer; }
-.flow-sidebar__rename-button:hover { color: var(--flow-ink); background: #ffffff09; }
+.flow-sidebar__actions { display: flex; flex-wrap: wrap; align-items: center; width: 100%; padding: 0 6px; }
+.flow-sidebar__rename-button, .flow-sidebar__delete-button { min-height: 32px; padding: 8px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--flow-muted); font: inherit; font-size: 11px; cursor: pointer; }
+.flow-sidebar__rename-button:hover, .flow-sidebar__delete-button:hover { color: var(--flow-ink); background: #ffffff09; }
+.flow-sidebar__delete-button:hover { color: #f0998e; }
+.flow-sidebar__actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+.flow-sidebar__delete-error { width: 100%; margin-top: 8px; padding: 10px; border-radius: 6px; background: #f0998e12; color: #f0998e; }
+.flow-sidebar__delete-error p { margin: 0 0 8px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .flow-sidebar__rename-form { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; padding: 8px 12px 12px; }
 .flow-sidebar__rename-form label { color: var(--flow-muted); font-size: 11px; }
 .flow-sidebar__rename-form input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--flow-line); border-radius: 4px; background: var(--flow-surface); color: var(--flow-ink); font: inherit; font-size: 13px; }
