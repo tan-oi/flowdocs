@@ -82,25 +82,3 @@ test('delete validates IDs and handles repeated deletion without exposing databa
   assert.equal(failed.error.code, 'internal');
   assert.ok(!failed.error.message.includes('secret database details'));
 });
-
-test('rename and delete simulate delayed failures only in development and before database writes', async () => {
-  for (const mode of ['development', 'production']) {
-    for (const random of [0, 1]) {
-      let writes = 0;
-      const delays = [];
-      const mutation = async () => { writes++; return { id, title: 'Title', updatedAt: new Date() }; };
-      const api = actions(mutation, mutation, {
-        process: { env: { NODE_ENV: mode } },
-        Math: { random: () => random },
-        setTimeout: (resolve, milliseconds) => { delays.push(milliseconds); resolve(); },
-      });
-      const rename = await api.renameDocumentAction('Title', id);
-      const deletion = await api.deleteDocumentAction(id);
-      const shouldFail = mode === 'development' && random === 0;
-      assert.equal(rename.ok, !shouldFail);
-      assert.equal(deletion.ok, !shouldFail);
-      assert.equal(writes, shouldFail ? 0 : 2);
-      assert.deepEqual(delays, mode === 'development' ? [3000, 3000] : []);
-    }
-  }
-});

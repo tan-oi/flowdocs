@@ -21,18 +21,7 @@ type RenameResult =
       error: { code: "validation" | "not_found" | "internal"; message: string };
     };
 
-// Temporary development simulation for rename/delete pending and error UI.
-async function simulateMutationFailure() {
-  if (process.env.NODE_ENV !== "development") return;
-  await new Promise<void>((resolve) => setTimeout(resolve, 3000));
-  if (Math.random() < 0.9) throw new Error("Simulated development failure");
-}
-
 export async function createDocumentAction() {
-  // Simulate a slow creation request while the draft remains editable.
-  if (process.env.NODE_ENV === "development") {
-    await new Promise<void>((resolve) => setTimeout(resolve, 10000));
-  }
   return create("Untitled");
 }
 
@@ -50,7 +39,6 @@ export async function renameDocumentAction(
 
   //check auth
   try {
-    await simulateMutationFailure();
     const document = await renameDocument(
       input.data.documentId,
       input.data.title
@@ -85,10 +73,6 @@ export async function saveDocumentAction(
 ): Promise<SaveResult> {
   try {
     const result = await udpateContent(documentId, version, content);
-
-    if (process.env.NODE_ENV === "development") {
-      await new Promise<void>((resolve) => setTimeout(resolve, 10000));
-    }
     if (result.ok) {
       return {
         ok: true,
@@ -121,7 +105,6 @@ export async function deleteDocumentAction(documentId: string) {
     };
   }
   try {
-    await simulateMutationFailure();
     const document = await deleteDocument(input.data.documentId);
     // A repeated delete also succeeds if the record is already gone.
     return {
