@@ -1,9 +1,12 @@
 "use server";
 
 import { z } from "zod";
-import { udpateContent } from "./document.service";
-import type { SaveResult } from "./document.service";
-import { create, deleteDocument, renameDocument } from "./drizzle.adapter";
+import {
+  create,
+  deleteDocument,
+  renameDocument,
+  updateContent,
+} from "./drizzle.adapter";
 
 const renameSchema = z.object({
   documentId: z.uuid("Invalid document ID"),
@@ -13,6 +16,10 @@ const renameSchema = z.object({
 const deletionSchema = z.object({
   documentId: z.uuid("Invalid document ID"),
 });
+
+export type SaveResult =
+  | { ok: true; data: { revision: number } }
+  | { ok: false; error: { code: "conflict" | "internal"; message: string } };
 
 type RenameResult =
   | { ok: true; data: { id: string; title: string; updatedAt: Date } }
@@ -71,26 +78,26 @@ export async function saveDocumentAction(
   content: unknown,
   version: number
 ): Promise<SaveResult> {
+  //check auth
   try {
-    const result = await udpateContent(documentId, version, content);
-    if (result.ok) {
-      return {
-        ok: true,
-        data: result.data,
-      };
-    } else {
+    const revision = await updateContent(documentId, content, version);
+    if (revision === null) {
       return {
         ok: false,
-        error: result.error,
+        error: {
+          code: "conflict",
+          message: "Document changed since it was opened",
+        },
       };
     }
+    return { ok: true, data: { revision } };
   } catch (err) {
     console.error(err);
     return {
       ok: false,
       error: {
         code: "internal",
-        message: "Somethign went wrong",
+        message: "Could not save document. Try again.",
       },
     };
   }
