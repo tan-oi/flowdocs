@@ -224,3 +224,21 @@ test('rename and delete turn rejected requests into returned errors without muta
   assert.match(deletion.error.message, /delete/);
   assert.equal(manager.getSnapshot(), snapshot);
 });
+
+test('a clean cached document left over 3 minutes ago is dropped, unsaved ones are kept', () => {
+  const DocumentManager = loadManager();
+  const manager = new DocumentManager([]);
+  const repo = (id, clean) => ({
+    documentId: id, localKey: `key-${id}`, title: id, updatedAt: new Date(),
+    lastUsedAt: Date.now() - 4 * 60_000, isClean: () => clean, subscribe: () => () => {},
+  });
+  const old = repo('old', true);
+  const dirty = repo('dirty', false);
+  const recent = { ...repo('recent', true), lastUsedAt: Date.now() };
+  [old, dirty, recent].forEach(r => manager.registerRepository(r));
+
+  assert.equal(manager.getCachedRepository('old'), null);
+  assert.equal(manager.getRepositoryByDocumentId('old'), null);
+  assert.equal(manager.getCachedRepository('dirty'), dirty);
+  assert.equal(manager.getCachedRepository('recent'), recent);
+});

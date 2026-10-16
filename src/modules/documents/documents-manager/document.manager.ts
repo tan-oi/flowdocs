@@ -14,13 +14,18 @@ export interface DocumentManagerSnapshot {
   repositories: readonly DocumentRepository[];
 }
 
+const CACHE_TTL_MS = 3 * 60_000;
+
 export class DocumentManager {
   private _metaData: DocMeta[];
   private _activeRepository: DocumentRepository | null = null;
   private snapshot: DocumentManagerSnapshot;
   private listeners = new Set<() => void>();
   private deletedDocuments = new Set<string>();
-  private pendingDeletes = new Map<string, ReturnType<typeof deleteDocumentAction>>();
+  private pendingDeletes = new Map<
+    string,
+    ReturnType<typeof deleteDocumentAction>
+  >();
   private _repositories = new Map<
     string,
     { repository: DocumentRepository; stopListening: () => void }
@@ -51,8 +56,13 @@ export class DocumentManager {
   }
 
   activateRepository(repository: DocumentRepository) {
-    if (repository.documentId && this.isDocumentUnavailable(repository.documentId)) return;
+    if (
+      repository.documentId &&
+      this.isDocumentUnavailable(repository.documentId)
+    )
+      return;
     if (this._activeRepository === repository) return;
+    if (this._activeRepository) this._activeRepository.lastUsedAt = Date.now();
     this._activeRepository = repository;
     if (repository.documentId) {
       this.rememberDocument({
@@ -90,7 +100,10 @@ export class DocumentManager {
     } catch {
       return {
         ok: false as const,
-        error: { code: "internal", message: "Could not rename document. Try again." },
+        error: {
+          code: "internal",
+          message: "Could not rename document. Try again.",
+        },
       };
     }
   }
@@ -106,7 +119,9 @@ export class DocumentManager {
     const operation = this.performDelete(documentId).finally(() => {
       this.pendingDeletes.delete(documentId);
       if (!this.isDocumentUnavailable(documentId)) {
-        void this.getRepositoryByDocumentId(documentId)?.resumeSaving().catch(console.error);
+        void this.getRepositoryByDocumentId(documentId)
+          ?.resumeSaving()
+          .catch(console.error);
       }
     });
     this.pendingDeletes.set(documentId, operation);
@@ -127,7 +142,10 @@ export class DocumentManager {
     } catch {
       return {
         ok: false as const,
-        error: { code: "internal", message: "Could not delete document. Try again." },
+        error: {
+          code: "internal",
+          message: "Could not delete document. Try again.",
+        },
       };
     }
   }
@@ -139,11 +157,17 @@ export class DocumentManager {
   registerRepository(repository: DocumentRepository) {
     if (this._repositories.has(repository.localKey)) return;
 
-    if (repository.documentId && this.isDocumentUnavailable(repository.documentId)) {
+    if (
+      repository.documentId &&
+      this.isDocumentUnavailable(repository.documentId)
+    ) {
       repository.markDeleted();
       return;
     }
-    if (repository.documentId && this.pendingDeletes.has(repository.documentId)) {
+    if (
+      repository.documentId &&
+      this.pendingDeletes.has(repository.documentId)
+    ) {
       repository.pauseSaving();
     }
 
@@ -190,6 +214,17 @@ export class DocumentManager {
       if (repository.documentId === documentId) return repository;
     }
     return null;
+  }
+
+  getCachedRepository(documentId: string) {
+    const repository = this.getRepositoryByDocumentId(documentId);
+    if (!repository || repository === this._activeRepository) return repository;
+    const expired = Date.now() - repository.lastUsedAt > CACHE_TTL_MS;
+    if (expired && repository.isClean()) {
+      this.unregisterRepository(repository.localKey);
+      return null;
+    }
+    return repository;
   }
 
   private emit() {

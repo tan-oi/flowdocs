@@ -89,7 +89,6 @@ test('creation failure retains content and save retry does not recreate', async 
     },
   });
   repo.updateState('retained');
-  // Failures schedule a quiet retry; each saveNow stands in for the retry firing.
   await repo.saveNow();
   assert.equal(repo.getSnapshot(), 'retrying');
   await repo.saveNow();

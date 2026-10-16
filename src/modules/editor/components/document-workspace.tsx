@@ -45,7 +45,7 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
       if (current && current.documentId === requestedId) return true;
 
       const cached = requestedId
-        ? manager.getRepositoryByDocumentId(requestedId)
+        ? manager.getCachedRepository(requestedId)
         : null;
       if (requestedId && !cached && !document) return false;
 

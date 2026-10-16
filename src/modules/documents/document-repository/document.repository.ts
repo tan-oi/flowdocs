@@ -31,6 +31,7 @@ export class DocumentRepository {
   private editVersion = 0;
 
   private status: SaveStatus = "saved";
+  lastUsedAt = Date.now();
   private listeners = new Set<() => void>();
 
   constructor(data?: Document) {
@@ -43,6 +44,10 @@ export class DocumentRepository {
       revision: data?.revision ?? 0,
     };
     this.status = data ? "saved" : "unsaved";
+  }
+
+  isClean() {
+    return this.status === "saved" && !this._isDirty && !this.saveInFlight;
   }
 
   get content(): Document["content"] {
@@ -72,7 +77,6 @@ export class DocumentRepository {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    // Any save that starts replaces a pending retry; the attempt count carries on.
     this.clearRetryTimer();
 
     if (!this.saveInFlight && (this.documentId === null || this._isDirty)) {
@@ -168,7 +172,6 @@ export class DocumentRepository {
         this.retryCounter = 0;
       } catch (error) {
         if (this.isDeleted || this.savingPaused) return;
-        // Retry quietly; only show the error once retries are exhausted.
         if (this.scheduleRetry()) return;
         this.setStatus("error");
         throw error;
@@ -196,7 +199,6 @@ export class DocumentRepository {
 
       if (!result.ok) {
         if (this.isDeleted || this.savingPaused) return;
-        // Resending the same revision can never resolve a conflict.
         if (result.error.code !== "conflict" && this.scheduleRetry()) return;
         this.setStatus(result.error.code === "conflict" ? "conflict" : "error");
         throw new Error(result.error.message || result.error.code);
