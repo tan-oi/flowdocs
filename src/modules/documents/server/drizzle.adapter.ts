@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { documents } from "@/src/db/schema";
 import { db } from "@/src/db";
@@ -55,7 +55,7 @@ export async function updateContent(
 ) {
   const result = await db
     .update(documents)
-    .set({ content, revision: versionId + 1, updatedAt: new Date() })
+    .set({ content, revision: versionId + 1, updatedAt: sql`now()` })
     .where(
       and(
         eq(documents.id, id),
@@ -71,7 +71,7 @@ export async function updateContent(
 export async function renameDocument(documentId: string, newTitle: string) {
   const [document] = await db
     .update(documents)
-    .set({ title: newTitle, updatedAt: new Date() })
+    .set({ title: newTitle, updatedAt: sql`now()` })
     .where(and(eq(documents.id, documentId), isNull(documents.deletedAt)))
     .returning({
       id: documents.id,
