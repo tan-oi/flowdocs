@@ -33,7 +33,7 @@ export class DocumentManager {
   constructor(recentDocuments: DocMeta[]) {
     this._metaData = [...recentDocuments];
     this.snapshot = {
-      recentDocuments: this._metaData.slice(0, 5),
+      recentDocuments: this._metaData.slice(0, 50),
       activeDocumentId: this.activeDocumentId,
       activeRepository: this._activeRepository,
       repositories: [],
@@ -229,7 +229,7 @@ export class DocumentManager {
 
   private emit() {
     this.snapshot = {
-      recentDocuments: this._metaData.slice(0, 5),
+      recentDocuments: this._metaData.slice(0, 50),
       activeDocumentId: this.activeDocumentId,
       activeRepository: this._activeRepository,
       repositories: Array.from(this._repositories.values()).map(

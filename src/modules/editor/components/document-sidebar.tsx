@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import DocumentRename from "./document-rename";
 import DocumentDelete from "./document-delete";
@@ -23,6 +24,8 @@ export default function DocumentSidebar() {
   const manager = useDocumentManager();
   const { recentDocuments, activeRepository, repositories } =
     useDocumentManagerSnapshot();
+  const [visible, setVisible] = useState(10);
+  const shownDocuments = recentDocuments.slice(0, visible);
 
   return (
     <aside className="flow-sidebar" aria-label="Workspace sidebar">
@@ -40,19 +43,38 @@ export default function DocumentSidebar() {
           {activeRepository && !activeRepository.documentId && (
             <li className="flow-sidebar__row">
               <span className="flow-sidebar__document" aria-current="page">
-                <span className="flow-sidebar__title">{activeRepository.title}</span>
-                <span className="flow-sidebar__status" data-status={activeRepository.getSnapshot()}>
+                <span className="flow-sidebar__title">
+                  {activeRepository.title}
+                </span>
+                <span
+                  className="flow-sidebar__status"
+                  data-status={activeRepository.getSnapshot()}
+                >
                   {statusLabels[activeRepository.getSnapshot()]}
                 </span>
               </span>
               <div className="flow-sidebar__actions">
-                <button type="button" className="flow-sidebar__rename-button" disabled>Rename</button>
-                <button type="button" className="flow-sidebar__delete-button" disabled>Delete</button>
+                <button
+                  type="button"
+                  className="flow-sidebar__rename-button"
+                  disabled
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  className="flow-sidebar__delete-button"
+                  disabled
+                >
+                  Delete
+                </button>
               </div>
             </li>
           )}
-          {recentDocuments.map((document) => {
-            const repository = repositories.find((repo) => repo.documentId === document.id);
+          {shownDocuments.map((document) => {
+            const repository = repositories.find(
+              (repo) => repo.documentId === document.id
+            );
             const status = repository?.getSnapshot();
             return (
               <li key={document.id} className="flow-sidebar__row">
@@ -62,7 +84,7 @@ export default function DocumentSidebar() {
                   prefetch={false}
                   scroll={false}
                   onNavigate={(event) => {
-                    const cached = manager.getRepositoryByDocumentId(document.id);
+                    const cached = manager.getCachedRepository(document.id);
                     if (!cached) return;
 
                     event.preventDefault();
@@ -72,7 +94,11 @@ export default function DocumentSidebar() {
                     }
                     manager.activateRepository(cached);
                   }}
-                  aria-current={activeRepository?.documentId === document.id ? "page" : undefined}
+                  aria-current={
+                    activeRepository?.documentId === document.id
+                      ? "page"
+                      : undefined
+                  }
                 >
                   <span className="flow-sidebar__title">{document.title}</span>
                   {status && status !== "paused" && (
@@ -89,8 +115,19 @@ export default function DocumentSidebar() {
             );
           })}
         </ul>
+        {recentDocuments.length > visible && (
+          <button
+            type="button"
+            className="flow-sidebar__more"
+            onClick={() => setVisible((count) => count + 10)}
+          >
+            Show more
+          </button>
+        )}
         {recentDocuments.length === 0 && !activeRepository && (
-          <p className="flow-sidebar__empty">Create a document to start writing.</p>
+          <p className="flow-sidebar__empty">
+            Create a document to start writing.
+          </p>
         )}
       </nav>
     </aside>

@@ -81,6 +81,7 @@ function workspace(deleteDocumentAction = async id => ({ ok: true, data: { id } 
     },
   });
   const { default: DocumentSidebar } = loadModule('./document-sidebar.tsx', {
+    react: { useState: initial => [initial, () => {}] },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'next/link': { default: 'link' },
     './document-rename': { default: () => null },
@@ -357,14 +358,14 @@ test('background draft creation publishes a sidebar link without changing select
   assert.equal(app.active.content, 'Background text');
 });
 
-test('renamed metadata survives falling out of the five visible recent documents', async () => {
+test('renamed metadata survives falling out of the 50 recent documents', async () => {
   const app = workspace();
   app.route('/document/A', document('A'));
   await app.manager.renameDocument('Renamed A', 'A');
-  for (const id of ['B', 'C', 'D', 'E', 'F']) {
-    app.route(`/document/${id}`, document(id));
+  for (let i = 0; i < 50; i++) {
+    app.route(`/document/doc-${i}`, document(`doc-${i}`));
   }
-  assert.equal(app.manager.getSnapshot().recentDocuments.length, 5);
+  assert.equal(app.manager.getSnapshot().recentDocuments.length, 50);
   app.route('/document/A', document('A'));
   assert.equal(app.manager.getSnapshot().recentDocuments[0].title, 'Renamed A');
 });

@@ -7,7 +7,7 @@ export default async function DocumentLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const recentDocuments = await listRecent(5);
+  const recentDocuments = await listRecent(50);
 
   return (
     <DocumentManagerProvider recentDocuments={recentDocuments}>
