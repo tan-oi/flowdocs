@@ -55,7 +55,7 @@ export async function updateContent(
 ) {
   const result = await db
     .update(documents)
-    .set({ content, revision: versionId + 1 })
+    .set({ content, revision: versionId + 1, updatedAt: new Date() })
     .where(
       and(
         eq(documents.id, id),
