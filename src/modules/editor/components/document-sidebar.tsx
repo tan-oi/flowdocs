@@ -14,6 +14,8 @@ const statusLabels = {
   creating: "Creating…",
   unsaved: "Unsaved changes",
   error: "Couldn’t save",
+  retrying: "Retrying…",
+  conflict: "Changed elsewhere",
   paused: null,
 };
 

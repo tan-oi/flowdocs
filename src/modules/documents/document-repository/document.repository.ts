@@ -1,7 +1,15 @@
 import type { Document } from "../document.types";
 import { createDocumentAction, saveDocumentAction } from "../server/actions";
 
-type SaveStatus = "saved" | "saving" | "creating" | "unsaved" | "error" | "paused";
+type SaveStatus =
+  | "saved"
+  | "saving"
+  | "creating"
+  | "unsaved"
+  | "error"
+  | "retrying"
+  | "conflict"
+  | "paused";
 export class DocumentRepository {
   private _documentData: Pick<Document, "content" | "revision">;
   private _isDirty = false;
@@ -16,6 +24,9 @@ export class DocumentRepository {
   documentId: string | null;
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryCounter = 0;
   private saveInFlight: Promise<void> | null = null;
   private editVersion = 0;
 
@@ -61,6 +72,8 @@ export class DocumentRepository {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    // Any save that starts replaces a pending retry; the attempt count carries on.
+    this.clearRetryTimer();
 
     if (!this.saveInFlight && (this.documentId === null || this._isDirty)) {
       this.saveInFlight = Promise.resolve().then(() =>
@@ -106,6 +119,7 @@ export class DocumentRepository {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    this.clearRetryTimer();
     if (!this.isDeleted) this.setStatus("paused");
   }
 
@@ -122,6 +136,27 @@ export class DocumentRepository {
     await this.saveNow();
   }
 
+  private scheduleRetry(): boolean {
+    if (this.retryCounter >= 3) return false;
+
+    const wait = 1000 * 2 ** this.retryCounter;
+    this.retryCounter++;
+
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.saveNow().catch(console.error);
+    }, wait);
+    this.setStatus("retrying");
+    return true;
+  }
+
+  private clearRetryTimer() {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
   private async savePendingChanges() {
     if (this.isDeleted || this.savingPaused) return;
     if (this.documentId === null) {
@@ -130,7 +165,11 @@ export class DocumentRepository {
         const document = await createDocumentAction();
         this.documentId = document.id;
         this._documentData.revision = document.revision;
+        this.retryCounter = 0;
       } catch (error) {
+        if (this.isDeleted || this.savingPaused) return;
+        // Retry quietly; only show the error once retries are exhausted.
+        if (this.scheduleRetry()) return;
         this.setStatus("error");
         throw error;
       }
@@ -150,16 +189,20 @@ export class DocumentRepository {
         );
       } catch (error) {
         if (this.isDeleted || this.savingPaused) return;
+        if (this.scheduleRetry()) return;
         this.setStatus("error");
         throw error;
       }
 
       if (!result.ok) {
         if (this.isDeleted || this.savingPaused) return;
-        this.setStatus("error");
+        // Resending the same revision can never resolve a conflict.
+        if (result.error.code !== "conflict" && this.scheduleRetry()) return;
+        this.setStatus(result.error.code === "conflict" ? "conflict" : "error");
         throw new Error(result.error.message || result.error.code);
       }
 
+      this.retryCounter = 0;
       this._documentData.revision = result.data.revision;
       this._isDirty = this.editVersion !== editVersion;
       // Retain the acknowledged revision in case deletion fails and saving resumes.

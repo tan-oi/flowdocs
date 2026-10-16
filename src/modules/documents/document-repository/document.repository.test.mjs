@@ -89,13 +89,77 @@ test('creation failure retains content and save retry does not recreate', async 
     },
   });
   repo.updateState('retained');
-  await assert.rejects(repo.saveNow());
-  assert.equal(repo.getSnapshot(), 'error');
-  await assert.rejects(repo.saveNow());
+  // Failures schedule a quiet retry; each saveNow stands in for the retry firing.
+  await repo.saveNow();
+  assert.equal(repo.getSnapshot(), 'retrying');
+  await repo.saveNow();
+  assert.equal(repo.getSnapshot(), 'retrying');
   await repo.saveNow();
   assert.equal(creates, 2);
   assert.equal(writes, 2);
   assert.equal(repo.getSnapshot(), 'saved');
+});
+
+const failed = code => ({ ok: false, error: { code, message: code } });
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+test('conflict shows an error immediately without retrying', async () => {
+  let writes = 0;
+  const repo = repository({
+    saveDocumentAction: async () => { writes++; return failed('conflict'); },
+  }, document);
+  repo.updateState('edit');
+  await assert.rejects(repo.saveNow());
+  assert.equal(repo.getSnapshot(), 'conflict');
+  await wait(1100);
+  assert.equal(writes, 1);
+});
+
+test('temporary failures retry three times before showing an error', async () => {
+  let writes = 0;
+  const repo = repository({
+    saveDocumentAction: async () => { writes++; return failed('internal'); },
+  }, document);
+  repo.updateState('edit');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await repo.saveNow();
+    assert.equal(repo.getSnapshot(), 'retrying');
+  }
+  await assert.rejects(repo.saveNow());
+  assert.equal(repo.getSnapshot(), 'error');
+  assert.equal(writes, 4);
+});
+
+test('a successful save resets the retry count', async () => {
+  let writes = 0;
+  const repo = repository({
+    saveDocumentAction: async (id, content, revision) => {
+      writes++;
+      return writes === 2 ? saved(revision + 1) : failed('internal');
+    },
+  }, document);
+  repo.updateState('first');
+  await repo.saveNow();
+  await repo.saveNow();
+  assert.equal(repo.getSnapshot(), 'saved');
+  repo.updateState('second');
+  for (let attempt = 0; attempt < 3; attempt++) await repo.saveNow();
+  assert.equal(repo.getSnapshot(), 'retrying');
+  await assert.rejects(repo.saveNow());
+  assert.equal(writes, 6);
+});
+
+test('pausing cancels a waiting retry', async () => {
+  let writes = 0;
+  const repo = repository({
+    saveDocumentAction: async () => { writes++; throw new Error('offline'); },
+  }, document);
+  repo.updateState('edit');
+  await repo.saveNow();
+  repo.pauseSaving();
+  await wait(1100);
+  assert.equal(writes, 1);
+  assert.equal(repo.getSnapshot(), 'paused');
 });
 
 test('closing the editor during creation still persists its pending content', async () => {

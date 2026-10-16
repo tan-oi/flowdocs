@@ -39,6 +39,8 @@ export default function ActiveDocument({
                 creating: "Creating…",
                 unsaved: "Unsaved changes",
                 error: "Couldn’t save",
+                retrying: "Couldn’t save. Retrying…",
+                conflict: "Changed elsewhere. Not saved",
               }[status]
             }
           </span>
