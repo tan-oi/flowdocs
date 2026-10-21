@@ -1,5 +1,8 @@
 import type { Document } from "@/src/modules/documents/document.types";
-import { createDocumentAction, saveDocumentAction } from "@/src/modules/documents/server/actions";
+import {
+  createDocumentAction,
+  saveDocumentAction,
+} from "@/src/modules/documents/server/actions";
 
 type SaveStatus =
   | "saved"
@@ -17,8 +20,7 @@ export class DocumentRepository {
   private savingPaused = false;
 
   readonly title: string;
-  // Last edit. Browser time on the first edit so the sidebar re-sorts at once,
-  // replaced by the database time when the save lands.
+
   updatedAt: Date;
   readonly isNew: boolean;
 
@@ -102,15 +104,21 @@ export class DocumentRepository {
 
   getSnapshot = () => this.status;
 
+  getDocumentId = () => this.documentId;
+
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
 
+  private notify() {
+    this.listeners.forEach((listener) => listener());
+  }
+
   private setStatus(next: SaveStatus) {
     if (this.status === next) return;
     this.status = next;
-    this.listeners.forEach((listener) => listener());
+    this.notify();
   }
 
   close() {
@@ -173,6 +181,7 @@ export class DocumentRepository {
       try {
         const document = await createDocumentAction();
         this.documentId = document.id;
+        this.notify();
         this._documentData.revision = document.revision;
         this.updatedAt = document.updatedAt;
         this.retryCounter = 0;

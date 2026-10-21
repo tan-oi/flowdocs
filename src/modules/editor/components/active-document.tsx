@@ -1,19 +1,18 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { DocumentRepository } from "../../documents/document-repository/document.repository";
-import Link from "next/link";
+import { DocumentRepository } from "@/src/modules/documents/document-repository/document.repository";
 import DocumentEditor from "./document-editor";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 export default function ActiveDocument({
   documentRepository,
 }: {
   documentRepository: DocumentRepository;
 }) {
-  const status = useSyncExternalStore(
+  const documentId = useSyncExternalStore(
     documentRepository.subscribe,
-    documentRepository.getSnapshot,
-    documentRepository.getSnapshot
+    documentRepository.getDocumentId,
+    documentRepository.getDocumentId
   );
-  const documentId = documentRepository.documentId;
 
   useEffect(() => {
     if (!documentId) return;
@@ -22,36 +21,14 @@ export default function ActiveDocument({
   }, [documentId, documentRepository]);
 
   return (
-    <main className="flow-document">
-      <div className="flow-document__topline">
-        <span className="flow-document__workspace">My workspace</span>
-        {status !== "paused" && (
-          <span
-            className="flow-document__status"
-            data-status={status}
-            role="status"
-          >
-            <i aria-hidden="true" />
-            {
-              {
-                saved: "All changes saved",
-                saving: "Saving…",
-                creating: "Creating…",
-                unsaved: "Unsaved changes",
-                error: "Couldn’t save",
-                retrying: "Couldn’t save. Retrying…",
-                conflict: "Changed elsewhere. Not saved",
-              }[status]
-            }
-          </span>
-        )}
-        <Link className="flow-document__new" href="/document/new">
-          <span aria-hidden="true">+</span> New document
-        </Link>
-      </div>
-      <div className="flow-document__body">
+    <div className="relative min-w-0 flex-1">
+      <SidebarTrigger
+        title="Sidebar ⌘B"
+        className="absolute top-4 left-4 text-quiet hover:text-foreground"
+      />
+      <div className="mx-auto mt-25 mb-25 w-[min(100%-80px,680px)] max-[600px]:mt-16 max-[600px]:w-[calc(100%-44px)]">
         <DocumentEditor repo={documentRepository} />
       </div>
-    </main>
+    </div>
   );
 }
