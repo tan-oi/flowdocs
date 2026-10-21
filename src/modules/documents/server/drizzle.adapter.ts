@@ -63,9 +63,9 @@ export async function updateContent(
         isNull(documents.deletedAt)
       )
     )
-    .returning({ revisedVersion: documents.revision });
+    .returning({ revision: documents.revision, updatedAt: documents.updatedAt });
 
-  return result[0]?.revisedVersion ?? null;
+  return result[0] ?? null;
 }
 
 export async function renameDocument(documentId: string, newTitle: string) {

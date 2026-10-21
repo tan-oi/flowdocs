@@ -1,5 +1,5 @@
-import type { Document } from "../document.types";
-import { createDocumentAction, saveDocumentAction } from "../server/actions";
+import type { Document } from "@/src/modules/documents/document.types";
+import { createDocumentAction, saveDocumentAction } from "@/src/modules/documents/server/actions";
 
 type SaveStatus =
   | "saved"
@@ -17,7 +17,9 @@ export class DocumentRepository {
   private savingPaused = false;
 
   readonly title: string;
-  readonly updatedAt: Date;
+  // Last edit. Browser time on the first edit so the sidebar re-sorts at once,
+  // replaced by the database time when the save lands.
+  updatedAt: Date;
   readonly isNew: boolean;
 
   readonly localKey: string = crypto.randomUUID();
@@ -58,6 +60,9 @@ export class DocumentRepository {
     if (this.isDeleted) return;
     this._documentData.content = newContent;
 
+    // The first edit since the last save makes this the latest document right away;
+    // the server's time replaces it once the save lands.
+    if (!this._isDirty) this.updatedAt = new Date();
     this._isDirty = true;
 
     if (!this.saveInFlight && !this.savingPaused) {
@@ -169,6 +174,7 @@ export class DocumentRepository {
         const document = await createDocumentAction();
         this.documentId = document.id;
         this._documentData.revision = document.revision;
+        this.updatedAt = document.updatedAt;
         this.retryCounter = 0;
       } catch (error) {
         if (this.isDeleted || this.savingPaused) return;
@@ -206,6 +212,7 @@ export class DocumentRepository {
 
       this.retryCounter = 0;
       this._documentData.revision = result.data.revision;
+      this.updatedAt = result.data.updatedAt;
       this._isDirty = this.editVersion !== editVersion;
       // Retain the acknowledged revision in case deletion fails and saving resumes.
       if (this.isDeleted || this.savingPaused) return;

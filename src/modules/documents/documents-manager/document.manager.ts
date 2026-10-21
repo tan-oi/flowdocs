@@ -1,5 +1,5 @@
-import type { DocumentRepository } from "../document-repository/document.repository";
-import { deleteDocumentAction, renameDocumentAction } from "../server/actions";
+import type { DocumentRepository } from "@/src/modules/documents/document-repository/document.repository";
+import { deleteDocumentAction, renameDocumentAction } from "@/src/modules/documents/server/actions";
 
 export interface DocMeta {
   id: string;
@@ -86,6 +86,14 @@ export class DocumentManager {
       existing ?? document,
       ...this._metaData.filter((doc) => doc.id !== document.id),
     ];
+  }
+
+  private touchDocument(documentId: string, updatedAt: Date) {
+    const doc = this._metaData.find((d) => d.id === documentId);
+    if (!doc || doc.updatedAt.getTime() === updatedAt.getTime()) return;
+    this._metaData = this._metaData.map((d) =>
+      d.id === documentId ? { ...d, updatedAt } : d
+    );
   }
 
   async renameDocument(title: string, documentId: string) {
@@ -181,6 +189,8 @@ export class DocumentManager {
           updatedAt: repository.updatedAt,
         });
       }
+      // An edit or a save moves the document's last-edited time, so the sidebar can re-order it.
+      if (knownId) this.touchDocument(knownId, repository.updatedAt);
       this.emit();
     });
 

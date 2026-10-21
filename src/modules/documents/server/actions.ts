@@ -18,7 +18,7 @@ const deletionSchema = z.object({
 });
 
 export type SaveResult =
-  | { ok: true; data: { revision: number } }
+  | { ok: true; data: { revision: number; updatedAt: Date } }
   | { ok: false; error: { code: "conflict" | "internal"; message: string } };
 
 type RenameResult =
@@ -80,8 +80,8 @@ export async function saveDocumentAction(
 ): Promise<SaveResult> {
   //check auth
   try {
-    const revision = await updateContent(documentId, content, version);
-    if (revision === null) {
+    const saved = await updateContent(documentId, content, version);
+    if (saved === null) {
       return {
         ok: false,
         error: {
@@ -90,7 +90,7 @@ export async function saveDocumentAction(
         },
       };
     }
-    return { ok: true, data: { revision } };
+    return { ok: true, data: saved };
   } catch (err) {
     console.error(err);
     return {
