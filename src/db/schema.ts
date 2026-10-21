@@ -16,9 +16,9 @@ export const documents = pgTable("documents", {
 
   revision: integer("revision").notNull().default(0),
 
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 
-  deletedAt: timestamp("deleted_at"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

@@ -15,6 +15,13 @@
       "when": 1791840926482,
       "tag": "0001_add_document_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792275099801,
+      "tag": "0002_timestamps_with_timezone",
+      "breakpoints": true
     }
   ]
 }
