@@ -7,20 +7,27 @@ import {
   useEffect,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { DocumentRepository } from "../../documents/document-repository/document.repository";
-import type { Document } from "../../documents/document.types";
+import { DocumentRepository } from "@/src/modules/documents/document-repository/document.repository";
+import type { Document } from "@/src/modules/documents/document.types";
 import ActiveDocument from "./active-document";
-import DocumentSidebar from "./document-sidebar";
+import DocumentSidebar from "./sidebar/document-sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
   useDocumentManager,
   useDocumentManagerSnapshot,
-} from "../../documents/documents-manager/document-manager-provider";
+} from "@/src/modules/documents/documents-manager/document-manager-provider";
 
 const DocumentRepositoryContext = createContext<
   ((document?: Document, documentId?: string) => boolean) | null
 >(null);
 
-export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
+export function DocumentWorkspace({
+  children,
+  sidebarOpen,
+}: {
+  children: React.ReactNode;
+  sidebarOpen: boolean;
+}) {
   const manager = useDocumentManager();
   const { activeRepository: documentRepository } = useDocumentManagerSnapshot();
 
@@ -62,15 +69,20 @@ export function DocumentWorkspace({ children }: { children: React.ReactNode }) {
   return (
     <DocumentRepositoryContext.Provider value={openDocument}>
       {children}
-      <div className="flow-workspace">
+      <SidebarProvider
+        defaultOpen={sidebarOpen}
+        style={{ "--sidebar-width": "274px" } as React.CSSProperties}
+      >
         <DocumentSidebar />
-        {documentRepository && (
-          <ActiveDocument
-            key={documentRepository.localKey}
-            documentRepository={documentRepository}
-          />
-        )}
-      </div>
+        <SidebarInset>
+          {documentRepository && (
+            <ActiveDocument
+              key={documentRepository.localKey}
+              documentRepository={documentRepository}
+            />
+          )}
+        </SidebarInset>
+      </SidebarProvider>
     </DocumentRepositoryContext.Provider>
   );
 }
