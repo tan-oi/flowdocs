@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { useEditor, EditorContent, type Content } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-
 import { DocumentRepository } from "@/src/modules/documents/document-repository/document.repository";
+import { useEditorApi } from "@/src/modules/editor/api/use-editor-api";
+import { EditorApiProvider } from "@/src/modules/editor/api/editor-api-context";
 
 export default function DocumentEditor({ repo }: { repo: DocumentRepository }) {
   useEffect(() => {
@@ -12,16 +11,12 @@ export default function DocumentEditor({ repo }: { repo: DocumentRepository }) {
     return () => repo.close();
   }, [repo]);
 
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: repo.content as Content,
-    immediatelyRender: false,
-    onUpdate: ({ editor }) => repo.updateState(editor.getJSON()),
-  });
+  const api = useEditorApi(repo);
+  if (!api) return null;
 
   return (
-    <>
-      <EditorContent editor={editor} />
-    </>
+    <EditorApiProvider value={api}>
+      <api.Content />
+    </EditorApiProvider>
   );
 }

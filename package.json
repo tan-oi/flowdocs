@@ -21,6 +21,7 @@
     "@mastra/observability": "^1.17.8",
     "@next/env": "^16.3.5",
     "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-unique-id": "3.31.3",
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
